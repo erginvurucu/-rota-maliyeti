@@ -1,0 +1,422 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Rota & Geçiş + Yakıt + Vapur Maliyeti — Türkiye</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<style>
+  :root{
+    --bg:#0f1521; --panel:#172033; --panel2:#1e2940; --line:#2a3650;
+    --text:#e8edf6; --muted:#9aa7bd; --accent:#3b82f6; --sea:#06b6d4;
+    --warn:#f59e0b; --best:#16a34a; --chip:#243049;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+       background:var(--bg);color:var(--text);}
+  .wrap{display:flex;height:100vh;min-height:560px}
+  .side{width:390px;min-width:350px;background:var(--panel);border-right:1px solid var(--line);
+        overflow-y:auto;padding:18px 18px 40px}
+  #map{flex:1}
+  h1{font-size:18px;margin:0 0 2px}
+  .sub{color:var(--muted);font-size:12px;margin:0 0 16px;line-height:1.5}
+  label{display:block;font-size:12px;color:var(--muted);margin:12px 0 5px;font-weight:600;
+        text-transform:uppercase;letter-spacing:.4px}
+  input,select{width:100%;padding:10px 11px;background:var(--panel2);border:1px solid var(--line);
+        border-radius:9px;color:var(--text);font-size:14px;outline:none}
+  input:focus,select:focus{border-color:var(--accent)}
+  .row{display:flex;gap:10px}
+  .row>div{flex:1}
+  button{width:100%;margin-top:16px;padding:12px;background:var(--accent);color:#fff;border:0;
+        border-radius:10px;font-size:15px;font-weight:600;cursor:pointer}
+  button:hover{filter:brightness(1.08)}
+  button:disabled{opacity:.55;cursor:not-allowed}
+  .opts{margin-top:8px;display:flex;flex-direction:column;gap:7px;background:var(--panel2);
+        border:1px solid var(--line);border-radius:10px;padding:11px 12px}
+  .opt{display:flex;align-items:center;gap:9px;font-size:13px;cursor:pointer}
+  .opt input{width:auto}
+  .opt .meta{color:var(--muted);font-size:11px;margin-left:auto}
+  .adv{margin-top:14px;border:1px solid var(--line);border-radius:10px;overflow:hidden}
+  .adv summary{padding:10px 12px;cursor:pointer;font-size:13px;color:var(--muted);
+        background:var(--panel2);font-weight:600;user-select:none}
+  .adv .body{padding:4px 12px 12px}
+  .results{margin-top:18px}
+  .route-card{background:var(--panel2);border:1px solid var(--line);border-radius:12px;
+        padding:13px 14px;margin-bottom:11px;cursor:pointer;transition:.15s}
+  .route-card:hover{border-color:var(--accent)}
+  .route-card.active{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent)}
+  .route-card.best{border-color:var(--best)}
+  .rc-top{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;gap:8px}
+  .rc-name{font-weight:700;font-size:13.5px;display:flex;align-items:center;gap:7px}
+  .badge{font-size:10px;padding:2px 7px;border-radius:20px;background:var(--best);color:#fff;font-weight:700;white-space:nowrap}
+  .rc-total{font-size:18px;font-weight:800;white-space:nowrap}
+  .rc-meta{color:var(--muted);font-size:12px;margin-bottom:9px}
+  .breakdown{display:flex;flex-direction:column;gap:4px;font-size:12.5px}
+  .bd-row{display:flex;justify-content:space-between}
+  .bd-row span:first-child{color:var(--muted)}
+  .crossings{margin-top:8px;display:flex;flex-wrap:wrap;gap:5px}
+  .chip{font-size:10.5px;background:var(--chip);border:1px solid var(--line);border-radius:20px;
+        padding:3px 8px;color:#cdd7e8}
+  .chip.sea{border-color:var(--sea);color:#a5f3fc}
+  .status{margin-top:14px;font-size:13px;color:var(--muted);min-height:18px}
+  .err{color:#f87171}
+  .foot{margin-top:22px;font-size:11px;color:var(--muted);line-height:1.6;border-top:1px solid var(--line);padding-top:12px}
+  @media(max-width:760px){
+    .wrap{flex-direction:column;height:auto}
+    .side{width:100%;min-width:0;border-right:0;border-bottom:1px solid var(--line)}
+    #map{height:55vh;min-height:340px}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="side">
+    <h1>🚗⛴️ Rota & Maliyet Hesaplayıcı</h1>
+    <p class="sub">Türkiye'ye özel · karayolu, köprü, tünel, otoyol <b>ve arabalı vapur</b> seçeneklerini yakıt dahil karşılaştırır. Fiyatlar otomatik güncellenir — istersen aşağıdan elle de değiştirebilirsin.</p>
+    <div id="updated" class="sub" style="margin-top:-8px;margin-bottom:14px;font-weight:600">⏳ Fiyatlar yükleniyor…</div>
+
+    <label>Nereden</label>
+    <input id="from" placeholder="ör. Esenyurt, İstanbul" value="Esenyurt, İstanbul">
+    <label>Nereye</label>
+    <input id="to" placeholder="ör. Yalova" value="Yalova">
+
+    <div class="row">
+      <div>
+        <label>Yakıt türü</label>
+        <select id="fuelType">
+          <option value="benzin">Benzin</option>
+          <option value="motorin" selected>Motorin</option>
+          <option value="lpg">LPG</option>
+        </select>
+      </div>
+      <div>
+        <label>Tüketim (L/100km)</label>
+        <input id="cons" type="number" step="0.1" value="7.5">
+      </div>
+    </div>
+
+    <label>Karşılaştırılacak seçenekler</label>
+    <div class="opts" id="opts">
+      <label class="opt"><input type="checkbox" id="optRoad" checked> 🛣️ Karayolu (alternatifli) <span class="meta">otomatik</span></label>
+      <label class="opt"><input type="checkbox" id="optAvrasya" checked> 🚇 Avrasya Tüneli üzerinden <span class="meta">280₺</span></label>
+      <label class="opt"><input type="checkbox" id="optF0" checked> ⛴️ Eskihisar–Topçular <span class="meta">730₺ · ~30dk</span></label>
+      <label class="opt"><input type="checkbox" id="optF1" checked> ⛴️ Pendik–Yalova <span class="meta">39₺ · ~45dk</span></label>
+      <label class="opt"><input type="checkbox" id="optF2"> ⛴️ Yenikapı–Yalova <span class="meta">39₺ · ~75dk</span></label>
+    </div>
+
+    <details class="adv">
+      <summary>⚙️ Fiyat ayarları (güncelle)</summary>
+      <div class="body">
+        <div class="row">
+          <div><label>Benzin ₺/L</label><input id="pBenzin" type="number" step="0.01" value="62.95"></div>
+          <div><label>Motorin ₺/L</label><input id="pMotorin" type="number" step="0.01" value="66.30"></div>
+        </div>
+        <div class="row">
+          <div><label>LPG ₺/L</label><input id="pLpg" type="number" step="0.01" value="27.50"></div>
+          <div><label>Otoyol ₺/km</label><input id="pOtoyol" type="number" step="0.1" value="1.8"></div>
+        </div>
+        <label style="margin-top:14px">Arabalı vapur (otomobil, tek yön ₺)</label>
+        <div class="row">
+          <div><label style="text-transform:none;font-size:11px">Eskihisar–Topçular</label><input id="fp0" type="number" value="730"></div>
+          <div><label style="text-transform:none;font-size:11px">Pendik–Yalova</label><input id="fp1" type="number" value="39"></div>
+        </div>
+        <div class="row">
+          <div><label style="text-transform:none;font-size:11px">Yenikapı–Yalova</label><input id="fp2" type="number" value="39"></div>
+          <div></div>
+        </div>
+        <p class="sub" style="margin-top:10px">Köprü/tünel ücretleri sabit ve gömülü (Osmangazi 995₺, 1915 Çanakkale 995₺, Avrasya 280₺, Yavuz S. Selim 95₺, 15 Temmuz & FSM 59₺). Pendik/Yenikapı vapur fiyatları kampanya kaynaklı düşük olabilir — yolculuktan önce ido.com.tr'den teyit et.</p>
+      </div>
+    </details>
+
+    <button id="go">Rotaları Hesapla</button>
+    <div class="status" id="status"></div>
+    <div class="results" id="results"></div>
+
+    <div class="foot">
+      Rota & harita: OpenStreetMap, Nominatim & OSRM (ücretsiz demo servisleri).
+      Otoyol ücreti ve vapur süreleri yaklaşıktır; vapur bekleme süresi hesaba katılmaz. Gerçek üründe kendi sunucun + resmi tarife/sefer verisi önerilir.
+    </div>
+  </div>
+  <div id="map"></div>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+// NOT: Aşağıdaki değerler "fiyatlar.json" yüklenemezse kullanılan GÖMÜLÜ YEDEK fiyatlardır.
+// Site yayında (http) açıldığında fiyatlar.json'dan en güncel değerler otomatik yüklenir.
+// ---- Köprü / tünel (sınıf-1 otomobil, ₺) ----
+let CROSSINGS = [
+  {name:"15 Temmuz Şehitler Köprüsü", lat:41.0451, lng:29.0344, price:59},
+  {name:"Fatih Sultan Mehmet Köprüsü", lat:41.0915, lng:29.0610, price:59},
+  {name:"Yavuz Sultan Selim Köprüsü", lat:41.2008, lng:29.1183, price:95},
+  {name:"Osmangazi Köprüsü",          lat:40.7569, lng:29.5183, price:995},
+  {name:"1915 Çanakkale Köprüsü",      lat:40.1947, lng:26.4039, price:995},
+  {name:"Avrasya Tüneli",              lat:41.0006, lng:28.9750, price:280},
+];
+
+// ---- Arabalı vapur hatları (otomobil tek yön) — gömülü yedek ----
+let FERRIES = [
+  {id:0, name:"Eskihisar–Topçular Arabalı Vapuru", dur:30, priceId:"fp0",
+   a:{name:"Eskihisar", lat:40.7656, lng:29.4250}, b:{name:"Topçular", lat:40.7186, lng:29.2861}},
+  {id:1, name:"Pendik–Yalova Arabalı Vapuru", dur:45, priceId:"fp1",
+   a:{name:"Pendik İskele", lat:40.8730, lng:29.2530}, b:{name:"Yalova İskele", lat:40.6540, lng:29.2760}},
+  {id:2, name:"Yenikapı–Yalova Arabalı Vapuru", dur:75, priceId:"fp2",
+   a:{name:"Yenikapı İskele", lat:40.9985, lng:28.9490}, b:{name:"Yalova İskele", lat:40.6540, lng:29.2760}},
+];
+const AVRASYA = {lat:41.0006, lng:28.9750};
+
+const map = L.map('map').setView([40.6, 29.1], 8);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+  {maxZoom:19, attribution:'© OpenStreetMap'}).addTo(map);
+
+let plans = [], markers = [], activeIdx = 0;
+const $ = id => document.getElementById(id);
+const statusEl = $('status');
+function setStatus(m, e){ statusEl.innerHTML=m; statusEl.className='status'+(e?' err':''); }
+function fmt(n){ return n.toLocaleString('tr-TR',{maximumFractionDigits:0}); }
+
+async function geocode(q){
+  const url=`https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=tr&q=${encodeURIComponent(q)}`;
+  const r=await fetch(url,{headers:{'Accept-Language':'tr'}}); const j=await r.json();
+  if(!j.length) throw new Error(`"${q}" bulunamadı`);
+  return {lat:parseFloat(j[0].lat), lng:parseFloat(j[0].lon), name:j[0].display_name.split(',')[0]};
+}
+
+function dist(a,b,c,d){
+  const R=6371,t=Math.PI/180;
+  const x=Math.sin((c-a)*t/2)**2+Math.cos(a*t)*Math.cos(c*t)*Math.sin((d-b)*t/2)**2;
+  return 2*R*Math.asin(Math.sqrt(x));
+}
+
+// OSRM rota: points = [{lat,lng},...]; ilk rotayı (veya alternatifleri) döndürür
+async function osrm(points, alternatives){
+  const seg=points.map(p=>`${p.lng},${p.lat}`).join(';');
+  const url=`https://router.project-osrm.org/route/v1/driving/${seg}?overview=full&geometries=geojson&steps=true`+
+            (alternatives?'&alternatives=true':'');
+  const r=await fetch(url); const j=await r.json();
+  if(j.code!=='Ok'||!j.routes.length) throw new Error('Rota bulunamadı');
+  return j.routes;
+}
+
+function detectCrossings(coords){
+  const hit=[];
+  for(const c of CROSSINGS){
+    for(let i=0;i<coords.length;i+=2){
+      if(dist(coords[i][1],coords[i][0],c.lat,c.lng)<2.5){ hit.push(c); break; }
+    }
+  }
+  return hit;
+}
+function otoyolKm(legs){
+  let m=0;
+  for(const leg of legs) for(const s of (leg.steps||[])){
+    const ref=(s.ref||'')+' '+(s.name||'');
+    if(/\bO-?\d/i.test(ref)) m+=s.distance;
+  }
+  return m/1000;
+}
+
+// bir veya birden çok karayolu bacağından maliyet topla
+function costFromLegs(routeObjs, opt){
+  let km=0, min=0, allCoords=[], allLegs=[];
+  routeObjs.forEach(rt=>{ km+=rt.distance/1000; min+=rt.duration/60;
+    allCoords.push(...rt.geometry.coordinates); allLegs.push(...rt.legs); });
+  const cross=detectCrossings(allCoords);
+  const crossCost=cross.reduce((s,c)=>s+c.price,0);
+  const oKm=otoyolKm(allLegs);
+  const otoyolCost=oKm*opt.perKm;
+  const fuelCost=(km/100)*opt.cons*opt.fuelPrice;
+  return {km,driveMin:min,cross,crossCost,oKm,otoyolCost,fuelCost,
+          roadCoords:routeObjs.map(r=>r.geometry.coordinates)};
+}
+
+async function calc(){
+  $('go').disabled=true; setStatus('📍 Adresler çözümleniyor…');
+  markers.forEach(m=>map.removeLayer(m)); markers=[];
+  plans.forEach(p=>p.layers.forEach(l=>map.removeLayer(l))); plans=[]; $('results').innerHTML='';
+  try{
+    const A=await geocode($('from').value.trim());
+    await new Promise(r=>setTimeout(r,1100));
+    const B=await geocode($('to').value.trim());
+
+    const ft=$('fuelType').value;
+    const opt={
+      cons:+$('cons').value, perKm:+$('pOtoyol').value,
+      fuelPrice:{benzin:+$('pBenzin').value, motorin:+$('pMotorin').value, lpg:+$('pLpg').value}[ft]
+    };
+
+    const built=[];
+
+    // 1) Karayolu (alternatifli)
+    if($('optRoad').checked){
+      setStatus('🛣️ Karayolu rotaları…');
+      const rts=await osrm([A,B], true);
+      rts.forEach((rt,i)=>{
+        const c=costFromLegs([rt],opt);
+        built.push(makePlan(`Karayolu ${i+1}`,'road',c,0,0,null));
+      });
+    }
+
+    // 2) Avrasya Tüneli üzerinden (waypoint zorlamalı)
+    if($('optAvrasya').checked){
+      setStatus('🚇 Avrasya Tüneli rotası…');
+      try{
+        const rts=await osrm([A,AVRASYA,B], false);
+        const c=costFromLegs([rts[0]],opt);
+        built.push(makePlan('Avrasya Tüneli üzerinden','tunnel',c,0,0,null));
+      }catch(e){}
+    }
+
+    // 3) Vapur hatları
+    for(const f of FERRIES){
+      if(!$('opt'+(f.id===0?'F0':f.id===1?'F1':'F2')).checked) continue;
+      setStatus(`⛴️ ${f.name}…`);
+      try{
+        // A'ya yakın olan iskele = kalkış
+        const dep = dist(A.lat,A.lng,f.a.lat,f.a.lng) <= dist(A.lat,A.lng,f.b.lat,f.b.lng) ? f.a : f.b;
+        const arr = dep===f.a ? f.b : f.a;
+        const leg1=await osrm([A,dep], false);
+        const leg2=await osrm([arr,B], false);
+        const c=costFromLegs([leg1[0],leg2[0]],opt);
+        const ferryCost=+$(f.priceId).value;
+        built.push(makePlan(f.name,'ferry',c,ferryCost,f.dur,
+          {dep,arr,name:f.name}));
+      }catch(e){}
+    }
+
+    if(!built.length){ setStatus('Hiç seçenek seçilmedi.',true); $('go').disabled=false; return; }
+
+    plans=built;
+    const minTotal=Math.min(...plans.map(p=>p.total));
+    plans.forEach(p=>p.best=p.total===minTotal);
+
+    drawAll(A,B);
+    render();
+    activeIdx=plans.findIndex(p=>p.best);
+    selectPlan(activeIdx);
+    setStatus(`✅ ${plans.length} seçenek bulundu. En ucuzu yeşil/işaretli.`);
+  }catch(e){ setStatus('⚠️ '+e.message,true); }
+  finally{ $('go').disabled=false; }
+}
+
+function makePlan(label,type,c,ferryCost,ferryMin,ferry){
+  const total=c.crossCost+c.otoyolCost+c.fuelCost+ferryCost;
+  return {label,type,...c,ferryCost,ferryMin,ferry,
+          totalMin:c.driveMin+ferryMin,total,layers:[]};
+}
+
+function drawAll(A,B){
+  const minTotal=Math.min(...plans.map(p=>p.total));
+  const allLL=[];
+  plans.forEach(p=>{
+    const isBest=p.total===minTotal;
+    const col=isBest?'#16a34a':(p.type==='ferry'?'#0891b2':p.type==='tunnel'?'#a855f7':'#3b82f6');
+    p.roadCoords.forEach(seg=>{
+      const ll=seg.map(c=>[c[1],c[0]]); allLL.push(...ll);
+      const line=L.polyline(ll,{color:col,weight:isBest?6:4,opacity:isBest?0.95:0.45}).addTo(map);
+      line.on('click',()=>selectPlan(plans.indexOf(p)));
+      p.layers.push(line);
+    });
+    if(p.ferry){
+      const sea=L.polyline([[p.ferry.dep.lat,p.ferry.dep.lng],[p.ferry.arr.lat,p.ferry.arr.lng]],
+        {color:col,weight:isBest?5:3,opacity:0.9,dashArray:'8 9'}).addTo(map);
+      sea.on('click',()=>selectPlan(plans.indexOf(p)));
+      p.layers.push(sea);
+      allLL.push([p.ferry.dep.lat,p.ferry.dep.lng],[p.ferry.arr.lat,p.ferry.arr.lng]);
+    }
+  });
+  markers.push(L.marker([A.lat,A.lng]).addTo(map).bindTooltip('Başlangıç: '+A.name));
+  markers.push(L.marker([B.lat,B.lng]).addTo(map).bindTooltip('Varış: '+B.name));
+  if(allLL.length) map.fitBounds(L.latLngBounds(allLL).pad(0.12));
+}
+
+function crossMarkers(p){
+  p.cross.forEach(c=>{
+    markers.push(L.circleMarker([c.lat,c.lng],{radius:7,color:'#f59e0b',fillColor:'#f59e0b',fillOpacity:.9})
+      .addTo(map).bindTooltip(`${c.name}: ${c.price}₺`));
+  });
+  if(p.ferry){
+    [p.ferry.dep,p.ferry.arr].forEach(pt=>markers.push(
+      L.circleMarker([pt.lat,pt.lng],{radius:7,color:'#06b6d4',fillColor:'#06b6d4',fillOpacity:.9})
+        .addTo(map).bindTooltip('⛴️ '+pt.name)));
+  }
+}
+
+function render(){
+  const res=$('results');
+  res.innerHTML='<label style="margin-top:6px">Seçenek karşılaştırması</label>';
+  const minTotal=Math.min(...plans.map(p=>p.total));
+  const order=[...plans].map((p,i)=>({p,i})).sort((x,y)=>x.p.total-y.p.total);
+  order.forEach(({p,i},rank)=>{
+    const best=p.total===minTotal;
+    const ic=p.type==='ferry'?'⛴️':p.type==='tunnel'?'🚇':'🛣️';
+    const chips=[];
+    p.cross.forEach(c=>chips.push(`<span class="chip">${c.name.replace(' Köprüsü','').replace(' Şehitler','')} · ${c.price}₺</span>`));
+    if(p.ferry) chips.push(`<span class="chip sea">⛴️ ${p.ferryCost}₺</span>`);
+    const ferryRow=p.ferry?`<div class="bd-row"><span>⛴️ Vapur</span><span>${fmt(p.ferryCost)} ₺</span></div>`:'';
+    const card=document.createElement('div');
+    card.className='route-card'+(best?' best':''); card.dataset.idx=i;
+    card.innerHTML=`
+      <div class="rc-top">
+        <div class="rc-name">${ic} ${p.label} ${best?'<span class="badge">EN UCUZ</span>':''}</div>
+        <div class="rc-total">${fmt(p.total)} ₺</div>
+      </div>
+      <div class="rc-meta">${p.km.toFixed(0)} km · ${Math.floor(p.totalMin/60)}sa ${Math.round(p.totalMin%60)}dk${p.ferry?' (vapur dahil)':''}</div>
+      <div class="breakdown">
+        <div class="bd-row"><span>⛽ Yakıt</span><span>${fmt(p.fuelCost)} ₺</span></div>
+        <div class="bd-row"><span>🛣️ Otoyol (~${p.oKm.toFixed(0)} km)</span><span>${fmt(p.otoyolCost)} ₺</span></div>
+        <div class="bd-row"><span>🌉 Köprü/Tünel</span><span>${fmt(p.crossCost)} ₺</span></div>
+        ${ferryRow}
+      </div>
+      ${chips.length?`<div class="crossings">${chips.join('')}</div>`:''}`;
+    card.onclick=()=>selectPlan(i);
+    res.appendChild(card);
+  });
+}
+
+function selectPlan(idx){
+  activeIdx=idx;
+  const minTotal=Math.min(...plans.map(p=>p.total));
+  plans.forEach((p,i)=>{
+    const sel=i===idx;
+    const col=p.total===minTotal?'#16a34a':(p.type==='ferry'?'#0891b2':p.type==='tunnel'?'#a855f7':'#64748b');
+    p.layers.forEach(l=>{
+      const dash=l.options.dashArray;
+      l.setStyle({weight:sel?6:(dash?3:4),opacity:sel?0.95:0.35,color:sel?(p.type==='ferry'?'#06b6d4':'#3b82f6'):col});
+      if(sel) l.bringToFront();
+    });
+  });
+  markers.filter(m=>m instanceof L.CircleMarker).forEach(m=>map.removeLayer(m));
+  markers=markers.filter(m=>!(m instanceof L.CircleMarker));
+  crossMarkers(plans[idx]);
+  document.querySelectorAll('.route-card').forEach(c=>c.classList.toggle('active',+c.dataset.idx===idx));
+}
+
+// ---- Fiyatları fiyatlar.json'dan yükle (yayında otomatik güncel) ----
+async function loadPrices(){
+  const lbl=$('updated');
+  try{
+    const r=await fetch('fiyatlar.json',{cache:'no-store'});
+    if(!r.ok) throw new Error('yok');
+    const p=await r.json();
+    if(Array.isArray(p.kopru_tunel)) CROSSINGS=p.kopru_tunel;
+    if(Array.isArray(p.vapur)) FERRIES=p.vapur.map(f=>({...f, priceId:'fp'+f.id}));
+    if(p.yakit){
+      if(p.yakit.benzin!=null) $('pBenzin').value=p.yakit.benzin;
+      if(p.yakit.motorin!=null) $('pMotorin').value=p.yakit.motorin;
+      if(p.yakit.lpg!=null) $('pLpg').value=p.yakit.lpg;
+    }
+    if(p.otoyol_km!=null) $('pOtoyol').value=p.otoyol_km;
+    FERRIES.forEach(f=>{ const el=$('fp'+f.id); if(el&&f.price!=null) el.value=f.price; });
+    if(lbl) lbl.textContent='🟢 Fiyatlar güncel: '+(p.guncelleme_tarihi||'—')+(p.yakit_ili?(' · yakıt baz: '+p.yakit_ili):'');
+  }catch(e){
+    if(lbl) lbl.textContent='⚪ Gömülü fiyatlar kullanılıyor (fiyatlar.json yüklenemedi — site yayındayken otomatik gelir)';
+  }
+}
+
+$('go').onclick=calc;
+['from','to'].forEach(id=>$(id).addEventListener('keydown',e=>{if(e.key==='Enter')calc();}));
+loadPrices();
+</script>
+</body>
+</html>

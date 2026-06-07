@@ -1,0 +1,99 @@
+{
+  "guncelleme_tarihi": "2026-06-07",
+  "yakit_ili": "İstanbul",
+  "yakit_kaynak": "manuel",
+  "yakit": {
+    "benzin": 62.95,
+    "motorin": 66.3,
+    "lpg": 27.5
+  },
+  "otoyol_km": 1.8,
+  "kopru_tunel": [
+    {
+      "name": "15 Temmuz Şehitler Köprüsü",
+      "lat": 41.0451,
+      "lng": 29.0344,
+      "price": 59
+    },
+    {
+      "name": "Fatih Sultan Mehmet Köprüsü",
+      "lat": 41.0915,
+      "lng": 29.061,
+      "price": 59
+    },
+    {
+      "name": "Yavuz Sultan Selim Köprüsü",
+      "lat": 41.2008,
+      "lng": 29.1183,
+      "price": 95
+    },
+    {
+      "name": "Osmangazi Köprüsü",
+      "lat": 40.7569,
+      "lng": 29.5183,
+      "price": 995
+    },
+    {
+      "name": "1915 Çanakkale Köprüsü",
+      "lat": 40.1947,
+      "lng": 26.4039,
+      "price": 995
+    },
+    {
+      "name": "Avrasya Tüneli",
+      "lat": 41.0006,
+      "lng": 28.975,
+      "price": 280
+    }
+  ],
+  "vapur": [
+    {
+      "id": 0,
+      "name": "Eskihisar–Topçular Arabalı Vapuru",
+      "dur": 30,
+      "price": 730,
+      "a": {
+        "name": "Eskihisar",
+        "lat": 40.7656,
+        "lng": 29.425
+      },
+      "b": {
+        "name": "Topçular",
+        "lat": 40.7186,
+        "lng": 29.2861
+      }
+    },
+    {
+      "id": 1,
+      "name": "Pendik–Yalova Arabalı Vapuru",
+      "dur": 45,
+      "price": 39,
+      "a": {
+        "name": "Pendik İskele",
+        "lat": 40.873,
+        "lng": 29.253
+      },
+      "b": {
+        "name": "Yalova İskele",
+        "lat": 40.654,
+        "lng": 29.276
+      }
+    },
+    {
+      "id": 2,
+      "name": "Yenikapı–Yalova Arabalı Vapuru",
+      "dur": 75,
+      "price": 39,
+      "a": {
+        "name": "Yenikapı İskele",
+        "lat": 40.9985,
+        "lng": 28.949
+      },
+      "b": {
+        "name": "Yalova İskele",
+        "lat": 40.654,
+        "lng": 29.276
+      }
+    }
+  ]
+}

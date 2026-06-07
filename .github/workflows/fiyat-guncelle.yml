@@ -1,0 +1,44 @@
+# GitHub Actions ile fiyatları otomatik güncelleme.
+# Bu dosyayı repo'da  .github/workflows/fiyat-guncelle.yml  yoluna koy.
+# Çalışınca guncelle.py'yi çalıştırır ve fiyatlar.json değiştiyse otomatik commit'ler.
+# Ücretsizdir (public repo'larda GitHub Actions bedava).
+
+name: Fiyatları Güncelle
+
+on:
+  schedule:
+    - cron: "0 6 * * *"   # her gün 06:00 UTC (Türkiye 09:00)
+  workflow_dispatch:        # elle de tetiklenebilir (Actions sekmesinden)
+
+permissions:
+  contents: write           # fiyatlar.json'u commit'leyebilmek için
+
+jobs:
+  guncelle:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Repo'yu indir
+        uses: actions/checkout@v4
+
+      - name: Python kur
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Fiyatları güncelle
+        env:
+          COLLECTAPI_KEY: ${{ secrets.COLLECTAPI_KEY }}   # repo Settings > Secrets'tan ekle
+          YAKIT_ILI: istanbul
+        run: python guncelle.py
+
+      - name: Değişiklikleri commit'le
+        run: |
+          git config user.name  "fiyat-bot"
+          git config user.email "bot@users.noreply.github.com"
+          if ! git diff --quiet fiyatlar.json; then
+            git add fiyatlar.json
+            git commit -m "Otomatik fiyat güncellemesi: $(date +%F)"
+            git push
+          else
+            echo "Değişiklik yok."
+          fi

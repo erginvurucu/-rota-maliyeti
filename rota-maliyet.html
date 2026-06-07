@@ -1,0 +1,306 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Rota & Geçiş + Yakıt Maliyeti — Türkiye</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<style>
+  :root{
+    --bg:#0f1521; --panel:#172033; --panel2:#1e2940; --line:#2a3650;
+    --text:#e8edf6; --muted:#9aa7bd; --accent:#3b82f6; --accent2:#22c55e;
+    --warn:#f59e0b; --best:#16a34a; --chip:#243049;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+       background:var(--bg);color:var(--text);}
+  .wrap{display:flex;height:100vh;min-height:560px}
+  .side{width:380px;min-width:340px;background:var(--panel);border-right:1px solid var(--line);
+        overflow-y:auto;padding:18px 18px 40px}
+  #map{flex:1}
+  h1{font-size:18px;margin:0 0 2px}
+  .sub{color:var(--muted);font-size:12px;margin:0 0 16px;line-height:1.5}
+  label{display:block;font-size:12px;color:var(--muted);margin:12px 0 5px;font-weight:600;
+        text-transform:uppercase;letter-spacing:.4px}
+  input,select{width:100%;padding:10px 11px;background:var(--panel2);border:1px solid var(--line);
+        border-radius:9px;color:var(--text);font-size:14px;outline:none}
+  input:focus,select:focus{border-color:var(--accent)}
+  .row{display:flex;gap:10px}
+  .row>div{flex:1}
+  button{width:100%;margin-top:16px;padding:12px;background:var(--accent);color:#fff;border:0;
+        border-radius:10px;font-size:15px;font-weight:600;cursor:pointer}
+  button:hover{filter:brightness(1.08)}
+  button:disabled{opacity:.55;cursor:not-allowed}
+  .adv{margin-top:14px;border:1px solid var(--line);border-radius:10px;overflow:hidden}
+  .adv summary{padding:10px 12px;cursor:pointer;font-size:13px;color:var(--muted);
+        background:var(--panel2);font-weight:600;user-select:none}
+  .adv .body{padding:4px 12px 12px}
+  .results{margin-top:18px}
+  .route-card{background:var(--panel2);border:1px solid var(--line);border-radius:12px;
+        padding:13px 14px;margin-bottom:11px;cursor:pointer;transition:.15s}
+  .route-card:hover{border-color:var(--accent)}
+  .route-card.active{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent)}
+  .route-card.best{border-color:var(--best)}
+  .rc-top{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}
+  .rc-name{font-weight:700;font-size:14px;display:flex;align-items:center;gap:7px}
+  .badge{font-size:10px;padding:2px 7px;border-radius:20px;background:var(--best);color:#fff;font-weight:700}
+  .rc-total{font-size:18px;font-weight:800}
+  .rc-meta{color:var(--muted);font-size:12px;margin-bottom:9px}
+  .breakdown{display:flex;flex-direction:column;gap:4px;font-size:12.5px}
+  .bd-row{display:flex;justify-content:space-between}
+  .bd-row span:first-child{color:var(--muted)}
+  .crossings{margin-top:8px;display:flex;flex-wrap:wrap;gap:5px}
+  .chip{font-size:10.5px;background:var(--chip);border:1px solid var(--line);border-radius:20px;
+        padding:3px 8px;color:#cdd7e8}
+  .status{margin-top:14px;font-size:13px;color:var(--muted);min-height:18px}
+  .err{color:#f87171}
+  .foot{margin-top:22px;font-size:11px;color:var(--muted);line-height:1.6;border-top:1px solid var(--line);padding-top:12px}
+  .leaflet-routeline-shadow{stroke:#000;stroke-opacity:.25}
+  @media(max-width:760px){
+    .wrap{flex-direction:column;height:auto}
+    .side{width:100%;min-width:0;border-right:0;border-bottom:1px solid var(--line)}
+    #map{height:55vh;min-height:340px}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="side">
+    <h1>🚗 Rota & Maliyet Hesaplayıcı</h1>
+    <p class="sub">Türkiye'ye özel · köprü, tünel, otoyol ve yakıt maliyetini karşılaştırır. Fiyatlar Haziran 2026 baz alınmıştır — istediğin an aşağıdan değiştirebilirsin.</p>
+
+    <label>Nereden</label>
+    <input id="from" placeholder="ör. İstanbul" value="İstanbul">
+    <label>Nereye</label>
+    <input id="to" placeholder="ör. İzmir" value="İzmir">
+
+    <div class="row">
+      <div>
+        <label>Yakıt türü</label>
+        <select id="fuelType">
+          <option value="benzin">Benzin</option>
+          <option value="motorin" selected>Motorin</option>
+          <option value="lpg">LPG</option>
+        </select>
+      </div>
+      <div>
+        <label>Tüketim (L/100km)</label>
+        <input id="cons" type="number" step="0.1" value="7.5">
+      </div>
+    </div>
+
+    <details class="adv">
+      <summary>⚙️ Fiyat ayarları (güncelle)</summary>
+      <div class="body">
+        <div class="row">
+          <div><label>Benzin ₺/L</label><input id="pBenzin" type="number" step="0.01" value="62.95"></div>
+          <div><label>Motorin ₺/L</label><input id="pMotorin" type="number" step="0.01" value="66.30"></div>
+        </div>
+        <div class="row">
+          <div><label>LPG ₺/L</label><input id="pLpg" type="number" step="0.01" value="27.50"></div>
+          <div><label>Otoyol ₺/km</label><input id="pOtoyol" type="number" step="0.1" value="1.8"></div>
+        </div>
+        <p class="sub" style="margin-top:10px">Köprü/tünel ücretleri sabit ve gömülü (Osmangazi 995₺, 1915 Çanakkale 995₺, Avrasya Tüneli 280₺, Yavuz S. Selim 95₺, 15 Temmuz & FSM 59₺). Otoyol ücreti, rotanın O- numaralı otoyollarda kat ettiği km × yukarıdaki ₺/km ile tahmin edilir.</p>
+      </div>
+    </details>
+
+    <button id="go">Rotaları Hesapla</button>
+    <div class="status" id="status"></div>
+    <div class="results" id="results"></div>
+
+    <div class="foot">
+      Rota & harita: OpenStreetMap, Nominatim & OSRM (ücretsiz demo servisleri).
+      Otoyol ücreti yaklaşıktır. Gerçek bir üründe kendi sunucun + resmi tarife verisi önerilir.
+    </div>
+  </div>
+  <div id="map"></div>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+// ---- Gömülü köprü / tünel verisi (2026, sınıf-1 otomobil, ₺) ----
+const CROSSINGS = [
+  {name:"15 Temmuz Şehitler Köprüsü", lat:41.0451, lng:29.0344, price:59},
+  {name:"Fatih Sultan Mehmet Köprüsü", lat:41.0915, lng:29.0610, price:59},
+  {name:"Yavuz Sultan Selim Köprüsü", lat:41.2008, lng:29.1183, price:95},
+  {name:"Osmangazi Köprüsü",          lat:40.7569, lng:29.5183, price:995},
+  {name:"1915 Çanakkale Köprüsü",      lat:40.1947, lng:26.4039, price:995},
+  {name:"Avrasya Tüneli",              lat:41.0006, lng:28.9750, price:280},
+];
+
+const map = L.map('map').setView([39.5, 33.5], 6);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+  {maxZoom:19, attribution:'© OpenStreetMap'}).addTo(map);
+
+let routeLayers = [], markers = [], routes = [], activeIdx = 0;
+const $ = id => document.getElementById(id);
+const statusEl = $('status');
+
+function setStatus(msg, isErr){ statusEl.innerHTML = msg; statusEl.className = 'status' + (isErr?' err':''); }
+
+async function geocode(q){
+  const url = `https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=tr&q=${encodeURIComponent(q)}`;
+  const r = await fetch(url, {headers:{'Accept-Language':'tr'}});
+  const j = await r.json();
+  if(!j.length) throw new Error(`"${q}" bulunamadı`);
+  return {lat:parseFloat(j[0].lat), lng:parseFloat(j[0].lon), name:j[0].display_name.split(',')[0]};
+}
+
+// Haversine (km)
+function dist(a,b,c,d){
+  const R=6371, t=Math.PI/180;
+  const dLa=(c-a)*t, dLo=(d-b)*t;
+  const x=Math.sin(dLa/2)**2 + Math.cos(a*t)*Math.cos(c*t)*Math.sin(dLo/2)**2;
+  return 2*R*Math.asin(Math.sqrt(x));
+}
+
+function detectCrossings(coords){
+  // coords: [[lng,lat],...]; köprü/tünel noktasına 2.5km içinde geçiyorsa say
+  const hit=[];
+  for(const c of CROSSINGS){
+    let near=false;
+    for(let i=0;i<coords.length;i+=2){
+      if(dist(coords[i][1],coords[i][0],c.lat,c.lng) < 2.5){ near=true; break; }
+    }
+    if(near) hit.push(c);
+  }
+  return hit;
+}
+
+function otoyolKm(legs){
+  // OSRM steps: ref "O-5" gibi otoyol referansları → toll otoyol km
+  let m=0;
+  for(const leg of legs){
+    for(const step of (leg.steps||[])){
+      const ref=(step.ref||'')+' '+(step.name||'');
+      if(/\bO-?\d/i.test(ref)) m += step.distance;
+    }
+  }
+  return m/1000;
+}
+
+function fmt(n){ return n.toLocaleString('tr-TR',{maximumFractionDigits:0}); }
+
+async function calc(){
+  $('go').disabled=true; setStatus('📍 Adresler çözümleniyor…');
+  routeLayers.forEach(l=>map.removeLayer(l)); markers.forEach(m=>map.removeLayer(m));
+  routeLayers=[]; markers=[]; routes=[]; $('results').innerHTML='';
+  try{
+    const A = await geocode($('from').value.trim());
+    await new Promise(r=>setTimeout(r,1100)); // Nominatim 1 req/sn politikası
+    const B = await geocode($('to').value.trim());
+
+    setStatus('🛣️ Rotalar hesaplanıyor…');
+    const url = `https://router.project-osrm.org/route/v1/driving/${A.lng},${A.lat};${B.lng},${B.lat}`+
+                `?overview=full&geometries=geojson&alternatives=true&steps=true`;
+    const r = await fetch(url);
+    const j = await r.json();
+    if(j.code!=='Ok' || !j.routes.length) throw new Error('Rota bulunamadı');
+
+    const fuelType=$('fuelType').value;
+    const fuelPrice = {benzin:+$('pBenzin').value, motorin:+$('pMotorin').value, lpg:+$('pLpg').value}[fuelType];
+    const cons=+$('cons').value, perKm=+$('pOtoyol').value;
+
+    routes = j.routes.map((rt,i)=>{
+      const km = rt.distance/1000, min = rt.duration/60;
+      const coords = rt.geometry.coordinates;
+      const cross = detectCrossings(coords);
+      const crossCost = cross.reduce((s,c)=>s+c.price,0);
+      const oKm = otoyolKm(rt.legs);
+      const otoyolCost = oKm*perKm;
+      const fuelCost = (km/100)*cons*fuelPrice;
+      const total = crossCost+otoyolCost+fuelCost;
+      return {i,km,min,coords,cross,crossCost,oKm,otoyolCost,fuelCost,total,rt};
+    });
+
+    const minTotal = Math.min(...routes.map(r=>r.total));
+
+    // çizim
+    const allCoords=[];
+    routes.forEach((rt)=>{
+      const latlng = rt.coords.map(c=>[c[1],c[0]]);
+      allCoords.push(...latlng);
+      const isBest = rt.total===minTotal;
+      const line = L.polyline(latlng, {
+        color:isBest?'#16a34a':'#3b82f6', weight:isBest?6:4,
+        opacity:isBest?0.95:0.5
+      }).addTo(map);
+      line.on('click',()=>selectRoute(rt.i));
+      routeLayers.push(line);
+    });
+    cross_markers(routes[routes.findIndex(r=>r.total===minTotal)]);
+    markers.push(L.marker([A.lat,A.lng]).addTo(map).bindTooltip('Başlangıç: '+A.name));
+    markers.push(L.marker([B.lat,B.lng]).addTo(map).bindTooltip('Varış: '+B.name));
+    map.fitBounds(L.latLngBounds(allCoords).pad(0.12));
+
+    render(minTotal);
+    activeIdx = routes.findIndex(r=>r.total===minTotal);
+    selectRoute(activeIdx);
+    setStatus(`✅ ${routes.length} rota bulundu. En ucuz rota yeşil ile gösterildi.`);
+  }catch(e){
+    setStatus('⚠️ '+e.message, true);
+  }finally{ $('go').disabled=false; }
+}
+
+function cross_markers(rt){
+  if(!rt) return;
+  rt.cross.forEach(c=>{
+    const m=L.circleMarker([c.lat,c.lng],{radius:7,color:'#f59e0b',fillColor:'#f59e0b',fillOpacity:.9})
+      .addTo(map).bindTooltip(`${c.name}: ${c.price}₺`);
+    markers.push(m);
+  });
+}
+
+function render(minTotal){
+  const res=$('results');
+  res.innerHTML = '<label style="margin-top:6px">Rota karşılaştırması</label>';
+  // ucuzdan pahalıya sırala (gösterimde), ama orijinal i'yi koru
+  const sorted=[...routes].sort((a,b)=>a.total-b.total);
+  sorted.forEach((rt,rank)=>{
+    const best = rt.total===minTotal;
+    const crossChips = rt.cross.length
+      ? `<div class="crossings">${rt.cross.map(c=>`<span class="chip">${c.name.replace(' Köprüsü','').replace(' Şehitler','')} · ${c.price}₺</span>`).join('')}</div>`
+      : '';
+    const card=document.createElement('div');
+    card.className='route-card'+(best?' best':'');
+    card.dataset.idx=rt.i;
+    card.innerHTML=`
+      <div class="rc-top">
+        <div class="rc-name">Rota ${rank+1} ${best?'<span class="badge">EN UCUZ</span>':''}</div>
+        <div class="rc-total">${fmt(rt.total)} ₺</div>
+      </div>
+      <div class="rc-meta">${rt.km.toFixed(0)} km · ${Math.floor(rt.min/60)}sa ${Math.round(rt.min%60)}dk</div>
+      <div class="breakdown">
+        <div class="bd-row"><span>⛽ Yakıt</span><span>${fmt(rt.fuelCost)} ₺</span></div>
+        <div class="bd-row"><span>🛣️ Otoyol (~${rt.oKm.toFixed(0)} km)</span><span>${fmt(rt.otoyolCost)} ₺</span></div>
+        <div class="bd-row"><span>🌉 Köprü/Tünel</span><span>${fmt(rt.crossCost)} ₺</span></div>
+      </div>
+      ${crossChips}`;
+    card.onclick=()=>selectRoute(rt.i);
+    res.appendChild(card);
+  });
+}
+
+function selectRoute(idx){
+  activeIdx=idx;
+  routeLayers.forEach((l,i)=>{
+    const rt=routes[i];
+    const sel=i===idx;
+    l.setStyle({weight:sel?6:4, opacity:sel?0.95:0.4,
+      color:sel?'#3b82f6':(rt.total===Math.min(...routes.map(r=>r.total))?'#16a34a':'#64748b')});
+    if(sel) l.bringToFront();
+  });
+  // köprü işaretlerini seçili rotaya göre yenile
+  markers.filter(m=>m instanceof L.CircleMarker).forEach(m=>map.removeLayer(m));
+  markers=markers.filter(m=>!(m instanceof L.CircleMarker));
+  cross_markers(routes[idx]);
+  document.querySelectorAll('.route-card').forEach(c=>{
+    c.classList.toggle('active', +c.dataset.idx===idx);
+  });
+}
+
+$('go').onclick=calc;
+[ 'from','to' ].forEach(id=>$(id).addEventListener('keydown',e=>{if(e.key==='Enter')calc();}));
+</script>
+</body>
+</html>
