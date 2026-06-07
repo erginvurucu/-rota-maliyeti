@@ -67,7 +67,7 @@
       "id": 1,
       "name": "Pendik–Yalova Arabalı Vapuru",
       "dur": 45,
-      "price": 39,
+      "price": 1800,
       "a": {
         "name": "Pendik İskele",
         "lat": 40.873,
@@ -83,7 +83,7 @@
       "id": 2,
       "name": "Yenikapı–Yalova Arabalı Vapuru",
       "dur": 75,
-      "price": 39,
+      "price": 2480,
       "a": {
         "name": "Yenikapı İskele",
         "lat": 40.9985,
